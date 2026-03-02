@@ -12,7 +12,7 @@ namespace Scripts.Features.MainScene
 
         public void Start()
         {
-            // TODO: 初期化処理
+            Debug.Log(GetType().Name + "_Started");
         }
     }
 }

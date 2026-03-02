@@ -1,0 +1,176 @@
+@startuml
+title VPN File Bridge - Unity Client Overall Flow (Activity + Partition)
+
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam activity {
+  BackgroundColor #F9FAFB
+  BorderColor #4B5563
+  FontColor #111827
+}
+skinparam partitionBorderColor #9CA3AF
+skinparam partitionBackgroundColor #FFFFFF
+
+start
+
+:アプリ起動;
+
+partition "Initialize" {
+:フレーム設定;
+}
+
+partition "VPN接続確認" {
+
+ if (IsConnected) then (Yes)
+  :処理;
+ else (No)
+  :処理;
+ endif
+}
+
+partition "ログイン" {
+ :処理;
+}
+if (IsLogined) then (Yes)
+ partition "同期" {
+ :処理;
+ }
+else (No)
+endif
+
+partition "MainScene表示" {
+ :処理;
+}
+
+partition "ユーザー操作" {
+ :処理;
+}
+
+if (PushButton) then (Upload)
+ partition "Downloadデータ" {
+  :処理;
+ }
+ else (Download)
+ partition "Uploadデータ" {
+  :処理;
+ }
+ endif
+
+partition "Server" {
+  :処理;
+}
+
+partition "GetResult" {
+  :処理;
+}
+
+Stop
+
+
+partition "User / UI" {
+  :アプリ起動;
+}
+
+partition "Client (MVP + State)" {
+  :DI初期化 / 初期State設定;
+}
+
+partition "User / UI" {
+  :接続/ログイン画面を表示;
+}
+
+partition "User / UI" {
+  if (VPN接続済み?) then (Yes)
+  else (No)
+    :VPN接続を促す;
+    :接続完了まで待機;
+  endif
+  :サーバURL/資格情報を入力;
+}
+
+partition "ApiClient" {
+  :ログインAPI送信;
+}
+
+partition "Server" {
+  :認証処理;
+}
+
+if (ログイン成功?) then (Yes)
+  partition "Client (MVP + State)" {
+    :アクセストークン保持;
+    :転送メニュー表示状態へ遷移;
+  }
+else (No)
+  partition "Client (MVP + State)" {
+    :認証失敗ログを記録;
+  }
+  partition "User / UI" {
+    :再入力/再試行を案内;
+  }
+  stop
+endif
+
+partition "User / UI" {
+  if (操作種別?) then (Upload)
+    :送信元ファイルと保存先パスを指定;
+  else (Download)
+    :取得元パスと保存先を指定;
+  endif
+}
+
+partition "Client (MVP + State)" {
+  :入力バリデーション;
+}
+
+partition "ApiClient" {
+  :転送API送信\n(auth + timeout + retry policy);
+}
+
+partition "Server" {
+  :認証/許可パス検証;
+  :転送処理;
+}
+
+if (転送成功?) then (Yes)
+  partition "Client (MVP + State)" {
+    :成功ログを記録;
+  }
+  partition "User / UI" {
+    :完了通知を表示;
+    :次の転送操作へ;
+  }
+  stop
+else (No)
+  partition "Client (MVP + State)" {
+    :エラーコード正規化;
+    :失敗ログを記録;
+  }
+
+  if (復旧可能エラー?) then (Yes)
+    partition "ApiClient" {
+      :自動再試行;
+    }
+    partition "User / UI" {
+      :再試行中表示;
+    }
+    if (再試行で回復?) then (Yes)
+      partition "User / UI" {
+        :完了通知を表示;
+      }
+      stop
+    else (No)
+      partition "User / UI" {
+        :再ログイン/再操作を案内;
+      }
+      stop
+    endif
+  else (No)
+    partition "User / UI" {
+      :再ログイン/再操作を案内;
+    }
+    stop
+  endif
+endif
+
+@enduml

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Scripts.Common.Core.StateMachine
+namespace Scripts.Common.Features.StateMachine
 {
     public sealed class StateMachine<TStateId>
     {

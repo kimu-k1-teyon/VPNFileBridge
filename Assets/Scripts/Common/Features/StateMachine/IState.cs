@@ -1,4 +1,4 @@
-namespace Scripts.Common.Core.StateMachine
+namespace Scripts.Common.Features.StateMachine
 {
     public interface IState<TStateId>
     {
