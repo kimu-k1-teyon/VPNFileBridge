@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -6,8 +7,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Scripts.Common.Features.Config;
 using Scripts.Common.Log;
-using seiko.framework.bases.exception;
 using UnityEngine;
+using UnityEngine.Networking;
 using VContainer;
 
 namespace Scripts.Common.Features.RestApi
@@ -18,6 +19,89 @@ namespace Scripts.Common.Features.RestApi
         [Inject] IConfigEnviourment _configEnviourment;
         [Inject] ILogService _log;
 
+        public async Task<ApiHttpResponse> GetAsync(string url, CancellationToken cancellationToken)
+        {
+            using (var request = UnityWebRequest.Get(url))
+            {
+                request.SetRequestHeader("Accept", "application/json");
+                return await SendAsync(request, cancellationToken);
+            }
+        }
+
+        public async Task<ApiHttpResponse> PostJsonAsync(string url, string jsonBody, CancellationToken cancellationToken)
+        {
+            var bodyBytes = Encoding.UTF8.GetBytes(jsonBody ?? string.Empty);
+            using (var request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST))
+            {
+                request.uploadHandler = new UploadHandlerRaw(bodyBytes);
+                request.downloadHandler = new DownloadHandlerBuffer();
+                request.SetRequestHeader("Content-Type", "application/json; charset=UTF-8");
+                request.SetRequestHeader("Accept", "application/json");
+                return await SendAsync(request, cancellationToken);
+            }
+        }
+
+        public async Task<ApiHttpResponse> PostMultipartAsync(
+            string url,
+            byte[] fileBytes,
+            string fileName,
+            string metaJson,
+            CancellationToken cancellationToken)
+        {
+            var formSections = new List<IMultipartFormSection>
+            {
+                new MultipartFormFileSection("file", fileBytes, fileName, "application/octet-stream")
+            };
+
+            if (!string.IsNullOrWhiteSpace(metaJson))
+            {
+                formSections.Add(new MultipartFormDataSection("meta", metaJson, Encoding.UTF8.ToString()));
+            }
+
+            using (var request = UnityWebRequest.Post(url, formSections))
+            {
+                request.SetRequestHeader("Accept", "application/json");
+                return await SendAsync(request, cancellationToken);
+            }
+        }
+
+        private static async Task<ApiHttpResponse> SendAsync(UnityWebRequest request, CancellationToken cancellationToken)
+        {
+            await UnityWebRequestAsync.SendAsync(request, cancellationToken);
+
+            var responseText = request.downloadHandler != null ? request.downloadHandler.text : string.Empty;
+            var isTransportSuccess =
+                request.result != UnityWebRequest.Result.ConnectionError &&
+                request.result != UnityWebRequest.Result.DataProcessingError;
+            var errorMessage = !string.IsNullOrWhiteSpace(request.error)
+                ? request.error
+                : string.Empty;
+
+            return new ApiHttpResponse(isTransportSuccess, request.responseCode, responseText, errorMessage);
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         [Serializable]
         public class UploadRequest
         {
@@ -25,31 +109,56 @@ namespace Scripts.Common.Features.RestApi
             public string fileBase64;
         }
 
-        public async Task<string> PostAsync2()
+        [Serializable]
+        public class DownloadRequest
+        {
+            public string requestedPath;
+        }
+
+        // Backward-compatible upload entrypoint.
+        public async Task<string> PostAsync()
+        {
+            return await PostUploadAsync(
+                requestedPath: "documents/from-unity.json",
+                fileBase64: "eyJoZWxsbyI6InVuaXR5In0="
+            );
+        }
+
+        public async Task<string> PostUploadAsync(string requestedPath, string fileBase64)
+        {
+            var req = new UploadRequest
+            {
+                requestedPath = requestedPath,
+                fileBase64 = fileBase64,
+            };
+            var json = JsonUtility.ToJson(req);
+            return await PostAsync("/api/UploadFile", json);
+        }
+
+        public async Task<string> PostDownloadAsync(string requestedPath)
+        {
+            var req = new DownloadRequest
+            {
+                requestedPath = requestedPath,
+            };
+            var json = JsonUtility.ToJson(req);
+            return await PostAsync("/api/DownloadFile", json);
+        }
+
+        private async Task<string> PostAsync(string url, string json)
         {
             try
             {
                 _log.Write("StartTask");
-                var req = new UploadRequest
-                {
-                    requestedPath = "documents/from-unity.json",
-                    fileBase64 = "eyJoZWxsbyI6InVuaXR5In0="
-                };
-                var json = JsonUtility.ToJson(req);
-                var url = @"api/UploadFile";
-
-                StringContent content = null;
-                HttpResponseMessage httpResponse = null;
-
-                content = new StringContent(json, Encoding.UTF8, "application/json");
+                using var content = new StringContent(json, Encoding.UTF8, "application/json");
                 var postTask = _model.Client.PostAsync(url, content);
                 var timeoutTask = Task.Delay(_model.Client.Timeout);
 
                 _log.Write("_model.Client.Timeout: " + _model.Client.Timeout.ToString());
-                _log.Write("StartPost");
+                _log.Write("StartPost: " + url);
                 var completed = await Task.WhenAny(postTask, timeoutTask);
 
-                _log.Write("FinishPost");
+                _log.Write("FinishPost: " + url);
 
                 if (completed != postTask)
                 {
@@ -58,16 +167,18 @@ namespace Scripts.Common.Features.RestApi
                     return null;
                 }
 
-                httpResponse = await postTask;
+                using var httpResponse = await postTask;
                 _log.Write("httpResponse.StatusCode: " + httpResponse.StatusCode);
 
                 if (httpResponse.StatusCode != HttpStatusCode.OK)
                 {
                     _log.Write("通信エラー　コード：" + (int)httpResponse.StatusCode);
+                    var errorResponse = await httpResponse.Content.ReadAsStringAsync();
+                    _log.Write("通信エラー　レスポンス：" + errorResponse);
                     return null;
                 }
 
-                string response = await httpResponse.Content.ReadAsStringAsync();
+                var response = await httpResponse.Content.ReadAsStringAsync();
                 _log.Write("POST通信成功");
                 return response;
             }
@@ -82,106 +193,49 @@ namespace Scripts.Common.Features.RestApi
                 _log.Write("POST通信終了");
             }
         }
+    }
 
-        public async Task<string> PostAsync()
+
+    public class ApiHttpResponse
+    {
+        public ApiHttpResponse(bool isTransportSuccess, long statusCode, string responseText, string errorMessage)
         {
-            try
-            {
-                _log.Write("StartTask");
-                var req = new UploadRequest
-                {
-                    requestedPath = "documents/from-unity.json",
-                    fileBase64 = "eyJoZWxsbyI6InVuaXR5In0="
-                };
-
-                var json = JsonUtility.ToJson(req);
-                using var content = new StringContent(json, Encoding.UTF8, "application/json");
-                using var cts = new CancellationTokenSource(_model.Client.Timeout);
-
-                _log.Write("_model.Client.Timeout: " + _model.Client.Timeout.ToString());
-                _log.Write("StartPost");
-                using var response = await _model.Client.PostAsync("/api/UploadFile", content, cts.Token);
-                _log.Write("response.StatusCode: " + response.StatusCode.ToString());
-                if (response.StatusCode != HttpStatusCode.OK) return null;
-
-                return await response.Content.ReadAsStringAsync();
-
-            }
-            catch (Exception e)
-            {
-                _log.Write("通信失敗: " + e.Message);
-                return null;
-            }
-            finally
-            {
-                // このメソッドが完了（return/throw）する直前に必ずメインへ戻す
-                // await UniTask.SwitchToMainThread();
-                Debug.Log("finally");
-                _log.Write("POST通信終了");
-            }
+            IsTransportSuccess = isTransportSuccess;
+            StatusCode = statusCode;
+            ResponseText = responseText ?? string.Empty;
+            ErrorMessage = errorMessage ?? string.Empty;
         }
 
-        public async Task<string> PostAsync(string json, string url)
+        public bool IsTransportSuccess { get; }
+        public long StatusCode { get; }
+        public string ResponseText { get; }
+        public string ErrorMessage { get; }
+
+        public bool IsSuccessStatusCode => StatusCode >= 200 && StatusCode < 300;
+    }
+
+
+    public static class UnityWebRequestAsync
+    {
+        public static Task<UnityWebRequest> SendAsync(UnityWebRequest request, CancellationToken cancellationToken)
         {
-            // await UniTask.SwitchToThreadPool();
-
-            try
+            var tcs = new TaskCompletionSource<UnityWebRequest>();
+            var registration = cancellationToken.Register(() =>
             {
-                Debug.Log("通信先URL：" + url);
-                await _log.WriteAsync("通信先URL：" + url);
-                // カウント
-                int count = 1;
-                // 通信が失敗した場合、指定回数繰り返す
-
-                StringContent content = null;
-                HttpResponseMessage httpResponse = null;
-
-                // リクエストボディの設定
-                content = new StringContent(json, Encoding.UTF8, "application/json");
-                // 通信処理実行
-                var postTask = _model.Client.PostAsync(url, content);
-
-                // ソフトタイムアウト
-                var timeoutTask = Task.Delay(_model.Client.Timeout);
-                var completed = await Task.WhenAny(postTask, timeoutTask);
-
-                if (completed != postTask)
+                if (!request.isDone)
                 {
-                    _ = postTask.ContinueWith(t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
-                    // CloseCloent();
-                    Debug.Log("POST通信タイムアウトエラー");
-                    await _log.WriteAsync("POST通信タイムアウトエラー");
-                    return null;
+                    request.Abort();
                 }
+            });
 
-                // 通信完了
-                httpResponse = await postTask;
-
-                Debug.Log("httpResponse.StatusCode: " + httpResponse.StatusCode);
-
-                // ステータスコードが200以外の場合、業務エラー
-                if (httpResponse.StatusCode != HttpStatusCode.OK)
-                {
-                    Debug.Log("通信エラー　コード：" + (int)httpResponse.StatusCode);
-                    await _log.WriteAsync("通信エラー　コード：" + (int)httpResponse.StatusCode);
-                    return null;
-                }
-
-                // 結果を返却
-                string response = await httpResponse.Content.ReadAsStringAsync();
-                await _log.WriteAsync("POST通信成功");
-                return response;
-                throw new GyomuException("POST通信タイムアウトエラー");
-
-            }
-            finally
+            var operation = request.SendWebRequest();
+            operation.completed += _ =>
             {
-                // このメソッドが完了（return/throw）する直前に必ずメインへ戻す
-                // await UniTask.SwitchToMainThread();
-                Debug.Log("finally");
-                await _log.WriteAsync("POST通信終了");
-            }
+                registration.Dispose();
+                tcs.TrySetResult(request);
+            };
 
+            return tcs.Task;
         }
     }
 }
