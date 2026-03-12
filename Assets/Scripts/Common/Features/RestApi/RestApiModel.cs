@@ -6,7 +6,6 @@ using UnityEngine;
 
 namespace Scripts.Common.Features.RestApi
 {
-
     public class RestApiModel
     {
         public HttpClient Client { get; set; }
@@ -17,20 +16,10 @@ namespace Scripts.Common.Features.RestApi
 
         public string HealthEndpoint => string.Concat(BaseUrl, "/api/Health");
         public string UploadEndpoint => string.Concat(BaseUrl, "/api/Upload");
+        public string DownloadEndpoint => string.Concat(BaseUrl, "/api/Download");
         public string GetMasterDataEndpoint => string.Concat(BaseUrl, "/api/GetMasterData");
         public string LogDirectoryPath => Path.Combine(Application.persistentDataPath, "M3Logs");
         public string LogFilePath => Path.Combine(LogDirectoryPath, LogFileName);
-    }
-
-    public class Request
-    {
-        public string requestedPath;
-        public string fileBase64;
-    }
-
-    public class MinimapData
-    {
-
     }
 
     public class GetMasterDataResult
@@ -99,5 +88,80 @@ namespace Scripts.Common.Features.RestApi
         public int targets;
         public MasterDataItem[] sampleA;
         public MasterDataItem[] sampleB;
+    }
+
+    public class UploadResult
+    {
+        private UploadResult(bool isSuccess, long statusCode, string uploadId, string message)
+        {
+            IsSuccess = isSuccess;
+            StatusCode = statusCode;
+            UploadId = uploadId ?? string.Empty;
+            Message = message ?? string.Empty;
+        }
+
+        public bool IsSuccess { get; }
+        public long StatusCode { get; }
+        public string UploadId { get; }
+        public string Message { get; }
+
+        public static UploadResult Success(long statusCode, string uploadId)
+        {
+            return new UploadResult(true, statusCode, uploadId, string.Empty);
+        }
+
+        public static UploadResult Failure(long statusCode, string message)
+        {
+            return new UploadResult(false, statusCode, string.Empty, message);
+        }
+    }
+
+    public class DownloadResult
+    {
+        private DownloadResult(bool isSuccess, long statusCode, string fileName, byte[] fileBytes, string message)
+        {
+            IsSuccess = isSuccess;
+            StatusCode = statusCode;
+            FileName = fileName ?? string.Empty;
+            FileBytes = fileBytes ?? System.Array.Empty<byte>();
+            Message = message ?? string.Empty;
+        }
+
+        public bool IsSuccess { get; }
+        public long StatusCode { get; }
+        public string FileName { get; }
+        public byte[] FileBytes { get; }
+        public string Message { get; }
+
+        public static DownloadResult Success(long statusCode, string fileName, byte[] fileBytes)
+        {
+            return new DownloadResult(true, statusCode, fileName, fileBytes, string.Empty);
+        }
+
+        public static DownloadResult Failure(long statusCode, string message)
+        {
+            return new DownloadResult(false, statusCode, string.Empty, System.Array.Empty<byte>(), message);
+        }
+    }
+
+    [Serializable]
+    public class UploadResponseDto
+    {
+        public string status;
+        public string uploadId;
+        public string message;
+    }
+
+    [Serializable]
+    public class ApiErrorResponseDto
+    {
+        public string status;
+        public string message;
+    }
+
+    [Serializable]
+    public class DownloadRequestDto
+    {
+        public string uploadId;
     }
 }

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Net;
-using System.Net.Http;
+using System.Collections.ObjectModel;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -65,9 +64,13 @@ namespace Scripts.Common.Features.RestApi
             }
         }
 
-        private static async Task<ApiHttpResponse> SendAsync(UnityWebRequest request, CancellationToken cancellationToken)
+        async Task<ApiHttpResponse> SendAsync(UnityWebRequest request, CancellationToken cancellationToken)
         {
-            await UnityWebRequestAsync.SendAsync(request, cancellationToken);
+            await Send(request, cancellationToken);
+
+            var responseBytes = request.downloadHandler != null
+                ? request.downloadHandler.data ?? Array.Empty<byte>()
+                : Array.Empty<byte>();
 
             var responseText = request.downloadHandler != null ? request.downloadHandler.text : string.Empty;
             var isTransportSuccess =
@@ -77,147 +80,18 @@ namespace Scripts.Common.Features.RestApi
                 ? request.error
                 : string.Empty;
 
-            return new ApiHttpResponse(isTransportSuccess, request.responseCode, responseText, errorMessage);
+            var headers = request.GetResponseHeaders() ?? new Dictionary<string, string>();
+
+            return new ApiHttpResponse(
+                isTransportSuccess,
+                request.responseCode,
+                responseText,
+                errorMessage,
+                responseBytes,
+                headers);
         }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        [Serializable]
-        public class UploadRequest
-        {
-            public string requestedPath;
-            public string fileBase64;
-        }
-
-        [Serializable]
-        public class DownloadRequest
-        {
-            public string requestedPath;
-        }
-
-        // Backward-compatible upload entrypoint.
-        public async Task<string> PostAsync()
-        {
-            return await PostUploadAsync(
-                requestedPath: "documents/from-unity.json",
-                fileBase64: "eyJoZWxsbyI6InVuaXR5In0="
-            );
-        }
-
-        public async Task<string> PostUploadAsync(string requestedPath, string fileBase64)
-        {
-            var req = new UploadRequest
-            {
-                requestedPath = requestedPath,
-                fileBase64 = fileBase64,
-            };
-            var json = JsonUtility.ToJson(req);
-            return await PostAsync("/api/UploadFile", json);
-        }
-
-        public async Task<string> PostDownloadAsync(string requestedPath)
-        {
-            var req = new DownloadRequest
-            {
-                requestedPath = requestedPath,
-            };
-            var json = JsonUtility.ToJson(req);
-            return await PostAsync("/api/DownloadFile", json);
-        }
-
-        private async Task<string> PostAsync(string url, string json)
-        {
-            try
-            {
-                _log.Write("StartTask");
-                using var content = new StringContent(json, Encoding.UTF8, "application/json");
-                var postTask = _model.Client.PostAsync(url, content);
-                var timeoutTask = Task.Delay(_model.Client.Timeout);
-
-                _log.Write("_model.Client.Timeout: " + _model.Client.Timeout.ToString());
-                _log.Write("StartPost: " + url);
-                var completed = await Task.WhenAny(postTask, timeoutTask);
-
-                _log.Write("FinishPost: " + url);
-
-                if (completed != postTask)
-                {
-                    _ = postTask.ContinueWith(t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
-                    _log.Write("POST通信タイムアウトエラー");
-                    return null;
-                }
-
-                using var httpResponse = await postTask;
-                _log.Write("httpResponse.StatusCode: " + httpResponse.StatusCode);
-
-                if (httpResponse.StatusCode != HttpStatusCode.OK)
-                {
-                    _log.Write("通信エラー　コード：" + (int)httpResponse.StatusCode);
-                    var errorResponse = await httpResponse.Content.ReadAsStringAsync();
-                    _log.Write("通信エラー　レスポンス：" + errorResponse);
-                    return null;
-                }
-
-                var response = await httpResponse.Content.ReadAsStringAsync();
-                _log.Write("POST通信成功");
-                return response;
-            }
-            catch (Exception e)
-            {
-                _log.Write("通信失敗: " + e.ToString());
-                _log.Write("通信失敗: " + e.Message);
-                return null;
-            }
-            finally
-            {
-                _log.Write("POST通信終了");
-            }
-        }
-    }
-
-
-    public class ApiHttpResponse
-    {
-        public ApiHttpResponse(bool isTransportSuccess, long statusCode, string responseText, string errorMessage)
-        {
-            IsTransportSuccess = isTransportSuccess;
-            StatusCode = statusCode;
-            ResponseText = responseText ?? string.Empty;
-            ErrorMessage = errorMessage ?? string.Empty;
-        }
-
-        public bool IsTransportSuccess { get; }
-        public long StatusCode { get; }
-        public string ResponseText { get; }
-        public string ErrorMessage { get; }
-
-        public bool IsSuccessStatusCode => StatusCode >= 200 && StatusCode < 300;
-    }
-
-
-    public static class UnityWebRequestAsync
-    {
-        public static Task<UnityWebRequest> SendAsync(UnityWebRequest request, CancellationToken cancellationToken)
+        Task<UnityWebRequest> Send(UnityWebRequest request, CancellationToken cancellationToken)
         {
             var tcs = new TaskCompletionSource<UnityWebRequest>();
             var registration = cancellationToken.Register(() =>
@@ -236,6 +110,47 @@ namespace Scripts.Common.Features.RestApi
             };
 
             return tcs.Task;
+        }
+    }
+
+    public class ApiHttpResponse
+    {
+        readonly ReadOnlyDictionary<string, string> _headers;
+
+        public ApiHttpResponse(
+            bool isTransportSuccess,
+            long statusCode,
+            string responseText,
+            string errorMessage,
+            byte[] responseBytes,
+            IDictionary<string, string> headers)
+        {
+            IsTransportSuccess = isTransportSuccess;
+            StatusCode = statusCode;
+            ResponseText = responseText ?? string.Empty;
+            ErrorMessage = errorMessage ?? string.Empty;
+            ResponseBytes = responseBytes ?? Array.Empty<byte>();
+            _headers = new ReadOnlyDictionary<string, string>(
+                new Dictionary<string, string>(headers ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase));
+        }
+
+        public bool IsTransportSuccess { get; }
+        public long StatusCode { get; }
+        public string ResponseText { get; }
+        public string ErrorMessage { get; }
+        public byte[] ResponseBytes { get; }
+        public IReadOnlyDictionary<string, string> Headers => _headers;
+
+        public bool IsSuccessStatusCode => StatusCode >= 200 && StatusCode < 300;
+
+        public string GetHeader(string headerName)
+        {
+            if (string.IsNullOrWhiteSpace(headerName))
+            {
+                return string.Empty;
+            }
+
+            return _headers.TryGetValue(headerName, out var value) ? value : string.Empty;
         }
     }
 }
