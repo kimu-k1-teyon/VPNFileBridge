@@ -1,14 +1,14 @@
 # Project AGENTS.md
 
 ## Mandatory Read Order（作業開始前に必ず読む）
-1) ./overview.md  （無ければ ./Docs/overview.md を探す）
+1) ./README.md  （無ければ ./Docs/README.md を探す）
 2) ./roadmap.md   （無ければ ./Docs/roadmap.md を探す）
 3) ./.agents/skills/intent-capture/SKILL.md（※フル読みは不要。必要時にスキルを使う）
 
 ## Preflight requirement（必須）
 - 返信の冒頭に必ず1行だけ出す：
-  Preflight: overview=OK|NG, roadmap=OK|NG, intent=OK|NG
-- overview または roadmap が NG の場合：
+  Preflight: README=OK|NG, roadmap=OK|NG, intent=OK|NG
+- README または roadmap が NG の場合：
   - 推測で進めない
   - その旨を報告して停止し、ユーザーにファイルの場所/内容の提示を依頼する
 
@@ -21,8 +21,8 @@
 - 迷う場合は Intent-Capture に寄せず、いったん Normal Answer を選び、必要なら確認質問を1つだけ行う
 
 ## How to work（読む/参照のルール）
-- ユーザー依頼に回答する前に、必ず overview.md と roadmap.md を開いて要点を把握してから返す
-- 仕様・前提・制約が overview/roadmap にある場合はそれを優先する（ユーザーの明示指示が最優先）
+- ユーザー依頼に回答する前に、必ず README.md と roadmap.md を開いて要点を把握してから返す
+- 仕様・前提・制約が README/roadmap にある場合はそれを優先する（ユーザーの明示指示が最優先）
 
 ## Routing（スキル使用の起動条件）
 - 新機能/設計相談/仕様整理/タスク分解/アーキ判断が含まれる依頼は、まず intent-capture を使う（実装やコード提示に入らない）
