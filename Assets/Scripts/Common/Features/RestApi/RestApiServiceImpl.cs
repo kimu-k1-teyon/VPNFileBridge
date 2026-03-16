@@ -42,20 +42,16 @@ namespace Scripts.Common.Features.RestApi
 
         public async Task<ApiHttpResponse> PostMultipartAsync(
             string url,
+            string uploadId,
             byte[] fileBytes,
             string fileName,
-            string metaJson,
             CancellationToken cancellationToken)
         {
             var formSections = new List<IMultipartFormSection>
             {
+                new MultipartFormDataSection("uploadId", uploadId, "text/plain"),
                 new MultipartFormFileSection("file", fileBytes, fileName, "application/octet-stream")
             };
-
-            if (!string.IsNullOrWhiteSpace(metaJson))
-            {
-                formSections.Add(new MultipartFormDataSection("meta", metaJson, Encoding.UTF8.ToString()));
-            }
 
             using (var request = UnityWebRequest.Post(url, formSections))
             {

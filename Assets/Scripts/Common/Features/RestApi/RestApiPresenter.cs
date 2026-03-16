@@ -1,5 +1,8 @@
 using System;
+using System.IO;
 using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using Scripts.Common.Features.Config;
 using Scripts.Common.Log;
 using UnityEngine;
@@ -12,6 +15,7 @@ namespace Scripts.Common.Features.RestApi
     {
         [Inject] RestApiModel _model;
         [Inject] IConfigEnviourment _configEnviourment;
+        [Inject] IRestApiUploadService _uploadService;
         [Inject] ILogService _log;
 
         public void Start()
@@ -20,7 +24,25 @@ namespace Scripts.Common.Features.RestApi
             _model.APIConfig = _configEnviourment.GetEnviourment("Develop").APIConfig;
             _model.BaseUrl = _configEnviourment.GetEnviourment("Develop").APIConfig.BaseUrl;
             InstanceClient(_model.APIConfig);
-            // _ = Post();
+            _ = Post();
+        }
+
+        async Task Post()
+        {
+            var id = "abcd-unity";
+            var filePath = Path.Combine(Application.streamingAssetsPath, "unity-sample-json.json");
+            var ct = new CancellationToken();
+            var result = await _uploadService.UploadAsync(id, filePath, ct);
+            if (result.IsSuccess)
+            {
+                Debug.Log(result.StatusCode);
+                Debug.Log(result.Message);
+            }
+            else
+            {
+                Debug.Log("Failed");
+            }
+            // throw new NotImplementedException();
         }
 
         void InstanceClient(APIConfig config)

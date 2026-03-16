@@ -5,6 +5,6 @@ namespace Scripts.Common.Features.RestApi
 {
     public interface IRestApiUploadService
     {
-        Task<UploadResult> UploadAsync(string filePath, CancellationToken cancellationToken);
+        Task<UploadResult> UploadAsync(string uploadId, string filePath, CancellationToken cancellationToken);
     }
 }

@@ -13,8 +13,18 @@ namespace Scripts.Common.Features.RestApi
         [Inject] RestApiModel _model;
         const int MaxUploadBytes = 10 * 1024 * 1024;
 
-        public async Task<UploadResult> UploadAsync(string filePath, CancellationToken cancellationToken)
+        public async Task<UploadResult> UploadAsync(string uploadId, string filePath, CancellationToken cancellationToken)
         {
+            if (string.IsNullOrWhiteSpace(uploadId))
+            {
+                return UploadResult.Failure(400, "uploadId is empty.");
+            }
+
+            if (!IsValidUploadId(uploadId))
+            {
+                return UploadResult.Failure(400, "uploadId must be 1-64 characters of A-Z, a-z, 0-9, underscore, or hyphen.");
+            }
+
             if (string.IsNullOrWhiteSpace(filePath))
             {
                 return UploadResult.Failure(0, "File path is empty.");
@@ -31,12 +41,11 @@ namespace Scripts.Common.Features.RestApi
                 return UploadResult.Failure(413, "File must be 10MB or smaller.");
             }
 
-            var metaJson = "{\"clientRequestId\":\"sample-001\"}";
             var response = await _service.PostMultipartAsync(
                 _model.UploadEndpoint,
+                uploadId,
                 fileBytes,
                 Path.GetFileName(filePath),
-                metaJson,
                 cancellationToken);
 
             if (!response.IsTransportSuccess)
@@ -46,7 +55,7 @@ namespace Scripts.Common.Features.RestApi
 
             if (!response.IsSuccessStatusCode)
             {
-                return UploadResult.Failure(response.StatusCode, "Failure");
+                return UploadResult.Failure(response.StatusCode, GetErrorMessage(response));
             }
 
             if (string.IsNullOrWhiteSpace(response.ResponseText))
@@ -61,6 +70,40 @@ namespace Scripts.Common.Features.RestApi
             }
 
             return UploadResult.Success(response.StatusCode, dto.uploadId);
+        }
+
+        static string GetErrorMessage(ApiHttpResponse response)
+        {
+            if (!string.IsNullOrWhiteSpace(response.ResponseText))
+            {
+                var errorDto = JsonUtility.FromJson<ApiErrorResponseDto>(response.ResponseText);
+                if (errorDto != null && !string.IsNullOrWhiteSpace(errorDto.message))
+                {
+                    return errorDto.message;
+                }
+            }
+
+            return "Failure";
+        }
+
+        static bool IsValidUploadId(string uploadId)
+        {
+            if (uploadId.Length > 64)
+            {
+                return false;
+            }
+
+            foreach (var ch in uploadId)
+            {
+                if (char.IsLetterOrDigit(ch) || ch == '_' || ch == '-')
+                {
+                    continue;
+                }
+
+                return false;
+            }
+
+            return true;
         }
     }
 }

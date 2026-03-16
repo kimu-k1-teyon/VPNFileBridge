@@ -9,9 +9,9 @@ namespace Scripts.Common.Features.RestApi
         Task<ApiHttpResponse> PostJsonAsync(string url, string jsonBody, CancellationToken cancellationToken);
         Task<ApiHttpResponse> PostMultipartAsync(
             string url,
+            string uploadId,
             byte[] fileBytes,
             string fileName,
-            string metaJson,
             CancellationToken cancellationToken);
     }
 }
