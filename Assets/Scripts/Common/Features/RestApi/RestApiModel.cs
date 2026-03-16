@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Net.Http;
 using Scripts.Common.Features.Config;
@@ -22,48 +24,16 @@ namespace Scripts.Common.Features.RestApi
         public string LogFilePath => Path.Combine(LogDirectoryPath, LogFileName);
     }
 
+    [Serializable]
     public class GetMasterDataResult
     {
-        private GetMasterDataResult(
-            bool isSuccess,
-            long statusCode,
-            int sosaKashoId,
-            int targets,
-            MasterDataItem[] sampleA,
-            MasterDataItem[] sampleB,
-            string message)
-        {
-            IsSuccess = isSuccess;
-            StatusCode = statusCode;
-            SosaKashoId = sosaKashoId;
-            Targets = targets;
-            SampleA = sampleA ?? System.Array.Empty<MasterDataItem>();
-            SampleB = sampleB ?? System.Array.Empty<MasterDataItem>();
-            Message = message ?? string.Empty;
-        }
-
-        public bool IsSuccess { get; }
-        public long StatusCode { get; }
-        public int SosaKashoId { get; }
-        public int Targets { get; }
-        public MasterDataItem[] SampleA { get; }
-        public MasterDataItem[] SampleB { get; }
-        public string Message { get; }
-
-        public static GetMasterDataResult Success(
-            long statusCode,
-            int sosaKashoId,
-            int targets,
-            MasterDataItem[] sampleA,
-            MasterDataItem[] sampleB)
-        {
-            return new GetMasterDataResult(true, statusCode, sosaKashoId, targets, sampleA, sampleB, string.Empty);
-        }
-
-        public static GetMasterDataResult Failure(long statusCode, string message)
-        {
-            return new GetMasterDataResult(false, statusCode, 0, 0, System.Array.Empty<MasterDataItem>(), System.Array.Empty<MasterDataItem>(), message);
-        }
+        public bool isSuccess;
+        public long statusCode;
+        public int sosaKashoId;
+        public int targets;
+        public MasterDataItem[] sampleA;
+        public MasterDataItem[] sampleB;
+        public string message;
     }
 
     [Serializable]
@@ -116,32 +86,14 @@ namespace Scripts.Common.Features.RestApi
         }
     }
 
+    [Serializable]
     public class DownloadResult
     {
-        private DownloadResult(bool isSuccess, long statusCode, string fileName, byte[] fileBytes, string message)
-        {
-            IsSuccess = isSuccess;
-            StatusCode = statusCode;
-            FileName = fileName ?? string.Empty;
-            FileBytes = fileBytes ?? System.Array.Empty<byte>();
-            Message = message ?? string.Empty;
-        }
-
-        public bool IsSuccess { get; }
-        public long StatusCode { get; }
-        public string FileName { get; }
-        public byte[] FileBytes { get; }
-        public string Message { get; }
-
-        public static DownloadResult Success(long statusCode, string fileName, byte[] fileBytes)
-        {
-            return new DownloadResult(true, statusCode, fileName, fileBytes, string.Empty);
-        }
-
-        public static DownloadResult Failure(long statusCode, string message)
-        {
-            return new DownloadResult(false, statusCode, string.Empty, System.Array.Empty<byte>(), message);
-        }
+        public bool isSuccess;
+        public long statusCode;
+        public string fileName;
+        public byte[] fileBytes;
+        public string message;
     }
 
     [Serializable]
@@ -163,5 +115,46 @@ namespace Scripts.Common.Features.RestApi
     public class DownloadRequestDto
     {
         public string uploadId;
+    }
+
+    public class ApiHttpResponse
+    {
+        readonly ReadOnlyDictionary<string, string> _headers;
+
+        public ApiHttpResponse(
+            bool isTransportSuccess,
+            long statusCode,
+            string responseText,
+            string errorMessage,
+            byte[] responseBytes,
+            IDictionary<string, string> headers)
+        {
+            IsTransportSuccess = isTransportSuccess;
+            StatusCode = statusCode;
+            ResponseText = responseText ?? string.Empty;
+            ErrorMessage = errorMessage ?? string.Empty;
+            ResponseBytes = responseBytes ?? Array.Empty<byte>();
+            _headers = new ReadOnlyDictionary<string, string>(
+                new Dictionary<string, string>(headers ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase));
+        }
+
+        public bool IsTransportSuccess { get; }
+        public long StatusCode { get; }
+        public string ResponseText { get; }
+        public string ErrorMessage { get; }
+        public byte[] ResponseBytes { get; }
+        public IReadOnlyDictionary<string, string> Headers => _headers;
+
+        public bool IsSuccessStatusCode => StatusCode >= 200 && StatusCode < 300;
+
+        public string GetHeader(string headerName)
+        {
+            if (string.IsNullOrWhiteSpace(headerName))
+            {
+                return string.Empty;
+            }
+
+            return _headers.TryGetValue(headerName, out var value) ? value : string.Empty;
+        }
     }
 }

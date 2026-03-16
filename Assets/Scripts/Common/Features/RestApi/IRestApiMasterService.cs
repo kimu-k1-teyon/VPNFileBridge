@@ -5,6 +5,6 @@ namespace Scripts.Common.Features.RestApi
 {
     public interface IRestApiMasterService
     {
-        Task<GetMasterDataResult> GetAsync(int targets, int sosaKashoId, CancellationToken cancellationToken);
+        Task<GetMasterDataResult> GetMasterData(int targets, int sosaKashoId);
     }
 }

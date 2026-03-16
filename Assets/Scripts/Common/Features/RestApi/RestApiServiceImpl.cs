@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Net;
+using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,25 +20,62 @@ namespace Scripts.Common.Features.RestApi
         [Inject] IConfigEnviourment _configEnviourment;
         [Inject] ILogService _log;
 
-        public async Task<ApiHttpResponse> GetAsync(string url, CancellationToken cancellationToken)
+
+        public async Task<HttpResponseMessage> PostAsync(string json, string url)
         {
-            using (var request = UnityWebRequest.Get(url))
+            StringContent content = null;
+            try
             {
-                request.SetRequestHeader("Accept", "application/json");
-                return await SendAsync(request, cancellationToken);
+                _log.Write("StartPostAsync");
+                // リクエストボディの設定
+                content = new StringContent(json, Encoding.UTF8, "application/json");
+                // 通信処理実行
+                var postTask = _model.Client.PostAsync(url, content);
+
+                // ソフトタイムアウト
+                var timeoutTask = Task.Delay(_model.APIConfig.TimeoutMS);
+                var completed = await Task.WhenAny(postTask, timeoutTask);
+
+                if (completed != postTask)
+                {
+                    _ = postTask.ContinueWith(t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
+                    _log.Write("POST通信タイムアウトエラー");
+                    return null;
+                }
+                return await postTask;
+            }
+            catch (Exception e)
+            {
+                _log.Write($"POST通信エラー {e}");
+                return null;
+            }
+            finally
+            {
+                _log.Write("Finish Task");
             }
         }
 
-        public async Task<ApiHttpResponse> PostJsonAsync(string url, string jsonBody, CancellationToken cancellationToken)
+        public async Task<string> GetAsync(string url)
         {
-            var bodyBytes = Encoding.UTF8.GetBytes(jsonBody ?? string.Empty);
-            using (var request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST))
+            try
             {
-                request.uploadHandler = new UploadHandlerRaw(bodyBytes);
-                request.downloadHandler = new DownloadHandlerBuffer();
-                request.SetRequestHeader("Content-Type", "application/json; charset=UTF-8");
-                request.SetRequestHeader("Accept", "application/json");
-                return await SendAsync(request, cancellationToken);
+                // 通信処理実行
+                HttpResponseMessage httpResponse = await _model.Client.GetAsync(url);
+
+                // ステータスコードが200以外の場合、業務エラー
+                if (httpResponse.StatusCode != HttpStatusCode.OK)
+                {
+                    _log.Write("通信エラー　コード：" + (int)httpResponse.StatusCode);
+                    return null;
+                }
+
+                // 結果を返却
+                return await httpResponse.Content.ReadAsStringAsync();
+            }
+            catch (Exception e)
+            {
+                _log.Write($"GET通信エラー {e}");
+                return null;
             }
         }
 
@@ -109,44 +148,5 @@ namespace Scripts.Common.Features.RestApi
         }
     }
 
-    public class ApiHttpResponse
-    {
-        readonly ReadOnlyDictionary<string, string> _headers;
 
-        public ApiHttpResponse(
-            bool isTransportSuccess,
-            long statusCode,
-            string responseText,
-            string errorMessage,
-            byte[] responseBytes,
-            IDictionary<string, string> headers)
-        {
-            IsTransportSuccess = isTransportSuccess;
-            StatusCode = statusCode;
-            ResponseText = responseText ?? string.Empty;
-            ErrorMessage = errorMessage ?? string.Empty;
-            ResponseBytes = responseBytes ?? Array.Empty<byte>();
-            _headers = new ReadOnlyDictionary<string, string>(
-                new Dictionary<string, string>(headers ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase));
-        }
-
-        public bool IsTransportSuccess { get; }
-        public long StatusCode { get; }
-        public string ResponseText { get; }
-        public string ErrorMessage { get; }
-        public byte[] ResponseBytes { get; }
-        public IReadOnlyDictionary<string, string> Headers => _headers;
-
-        public bool IsSuccessStatusCode => StatusCode >= 200 && StatusCode < 300;
-
-        public string GetHeader(string headerName)
-        {
-            if (string.IsNullOrWhiteSpace(headerName))
-            {
-                return string.Empty;
-            }
-
-            return _headers.TryGetValue(headerName, out var value) ? value : string.Empty;
-        }
-    }
 }

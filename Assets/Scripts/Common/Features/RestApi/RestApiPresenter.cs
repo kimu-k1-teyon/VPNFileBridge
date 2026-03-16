@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,6 +17,8 @@ namespace Scripts.Common.Features.RestApi
         [Inject] RestApiModel _model;
         [Inject] IConfigEnviourment _configEnviourment;
         [Inject] IRestApiUploadService _uploadService;
+        [Inject] IRestApiDownloadService _downloadService;
+        [Inject] IRestApiMasterService _masterService;
         [Inject] ILogService _log;
 
         public void Start()
@@ -24,25 +27,32 @@ namespace Scripts.Common.Features.RestApi
             _model.APIConfig = _configEnviourment.GetEnviourment("Develop").APIConfig;
             _model.BaseUrl = _configEnviourment.GetEnviourment("Develop").APIConfig.BaseUrl;
             InstanceClient(_model.APIConfig);
+
             _ = Post();
         }
 
         async Task Post()
         {
-            var id = "abcd-unity";
-            var filePath = Path.Combine(Application.streamingAssetsPath, "unity-sample-json.json");
-            var ct = new CancellationToken();
-            var result = await _uploadService.UploadAsync(id, filePath, ct);
-            if (result.IsSuccess)
+            var result = await _downloadService.DownloadAsync("abcd-unity");
+            if (result != null)
             {
-                Debug.Log(result.StatusCode);
-                Debug.Log(result.Message);
+                Debug.Log($"Length: {result.Length}");
             }
-            else
-            {
-                Debug.Log("Failed");
-            }
-            // throw new NotImplementedException();
+            // var result = await _masterService.GetMasterData(10, 1);
+            // if (result != null)
+            // {
+            //     Debug.Log($"isSuccess: {result.isSuccess}");
+            //     Debug.Log($"statusCode: {result.statusCode}");
+            //     Debug.Log($"targets: {result.targets}");
+            //     Debug.Log($"sosaKashoId: {result.sosaKashoId}");
+            //     Debug.Log($"message: {result.message}");
+
+            //     Debug.Log($"Success: {result.sampleB[0].id}");
+            // }
+            // else
+            // {
+            //     Debug.Log("Failed");
+            // }
         }
 
         void InstanceClient(APIConfig config)
@@ -51,6 +61,14 @@ namespace Scripts.Common.Features.RestApi
             {
                 // ハンドラの作成
                 HttpClientHandler handler = new HttpClientHandler();
+
+                if (_model.APIConfig.proxyAddress != null && _model.APIConfig.proxyAddress != "")
+                {
+                    handler.Proxy = new WebProxy(_model.APIConfig.proxyAddress);
+                    handler.UseProxy = true;
+                    // プロキシのログ出力
+                    Debug.Log("GetProxy：" + handler.Proxy.GetProxy(new Uri(_model.APIConfig.BaseUrl)).ToString());
+                }
 
                 // HTTPCLIENTの作成
                 _log.Write("BaseAddress: " + config.BaseUrl);

@@ -1,5 +1,4 @@
-using System;
-using System.Threading;
+using System.Net;
 using System.Threading.Tasks;
 using Scripts.Common.Log;
 using UnityEngine;
@@ -12,45 +11,27 @@ namespace Scripts.Common.Features.RestApi
         [Inject] IRestApiService _service;
         [Inject] RestApiModel _model;
         [Inject] ILogService _log;
-        // TODO: Component 実装
-        public async Task<GetMasterDataResult> GetAsync(int targets, int sosaKashoId, CancellationToken cancellationToken)
+
+        public async Task<GetMasterDataResult> GetMasterData(int targets, int sosaKashoId)
         {
             var payload = new GetMasterDataRequestDto
             {
                 targets = targets,
                 sosaKashoId = sosaKashoId
             };
+            var response = await _service.PostAsync(JsonUtility.ToJson(payload), _model.GetMasterDataEndpoint);
 
-            var response = await _service.PostJsonAsync(_model.GetMasterDataEndpoint, JsonUtility.ToJson(payload), cancellationToken);
-
-            if (!response.IsTransportSuccess)
+            _log.Write("response.StatusCode: " + response.StatusCode);
+            if (response.StatusCode == HttpStatusCode.OK)
             {
-                return GetMasterDataResult.Failure(response.StatusCode, response.ErrorMessage);
-            }
+                var json = await response.Content.ReadAsStringAsync();
 
-            if (!response.IsSuccessStatusCode)
+                return JsonUtility.FromJson<GetMasterDataResult>(json);
+            }
+            else
             {
-                return GetMasterDataResult.Failure(response.StatusCode, "IsSuccessStatusCode: False");
+                return null;
             }
-
-            if (string.IsNullOrWhiteSpace(response.ResponseText))
-            {
-                return GetMasterDataResult.Failure(response.StatusCode, "Empty response body.");
-            }
-
-            var dto = JsonUtility.FromJson<GetMasterDataResponseDto>(response.ResponseText);
-            if (dto == null)
-            {
-                return GetMasterDataResult.Failure(response.StatusCode, "Invalid GetMasterData response.");
-            }
-
-            return GetMasterDataResult.Success(
-                response.StatusCode,
-                dto.sosaKashoId,
-                dto.targets,
-                dto.sampleA ?? Array.Empty<MasterDataItem>(),
-                dto.sampleB ?? Array.Empty<MasterDataItem>());
-
         }
     }
 }
