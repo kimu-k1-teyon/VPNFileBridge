@@ -6,15 +6,11 @@ namespace Scripts.Common.Features.RestApi
 {
     public interface IRestApiService
     {
-        Task<ApiHttpResponse> PostMultipartAsync(
-            string url,
-            string uploadId,
-            byte[] fileBytes,
-            string fileName,
-            CancellationToken cancellationToken);
+        Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken,
+            int timeoutMs);
 
-        Task<HttpResponseMessage> PostAsync(string json, string url);
         Task<string> GetAsync(string url);
     }
-
 }

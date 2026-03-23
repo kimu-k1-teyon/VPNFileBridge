@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.IO;
 using System.Net.Http;
 using Scripts.Common.Features.Config;
@@ -12,6 +10,7 @@ namespace Scripts.Common.Features.RestApi
     {
         public HttpClient Client { get; set; }
         public APIConfig APIConfig { get; set; }
+        public int UploadTimeoutMS { get; set; } = 5 * 60 * 1000;
 
         public string BaseUrl { get; set; }
         public string LogFileName { get; set; }
@@ -29,61 +28,120 @@ namespace Scripts.Common.Features.RestApi
     {
         public bool isSuccess;
         public long statusCode;
-        public int sosaKashoId;
-        public int targets;
-        public MasterDataItem[] sampleA;
-        public MasterDataItem[] sampleB;
+        public int areaId;
+        public MasterCategoryRecord[] ms_categories;
+        public MasterAreaRecord[] ms_areas;
+        public MasterInspectorRecord[] ms_inspectors;
+        public MasterDetectionTypeRecord[] ms_detection_types;
+        public MasterJudgeConditionRecord[] ms_judge_conditions;
+        public MasterInspectionTargetRecord[] ms_inspection_targets;
+        public MasterInspectionItemRecord[] ms_inspection_items;
+        public MasterInspectionTargetAttachmentRecord[] ms_inspection_target_attachments;
         public string message;
     }
 
     [Serializable]
-    public class MasterDataItem
+    public class MasterCategoryRecord
     {
-        public string id;
-        public string value0;
-        public string value1;
+        public int category_id;
+        public string category_name;
+        public int display_no;
+    }
+
+    [Serializable]
+    public class MasterAreaRecord
+    {
+        public int area_id;
+        public int category_id;
+        public string area_name;
+        public int display_no;
+    }
+
+    [Serializable]
+    public class MasterInspectorRecord
+    {
+        public int inspector_id;
+        public int area_id;
+        public string inspector_name;
+        public int display_no;
+    }
+
+    [Serializable]
+    public class MasterDetectionTypeRecord
+    {
+        public int detection_type_id;
+        public string detection_type_name;
+        public int display_no;
+    }
+
+    [Serializable]
+    public class MasterJudgeConditionRecord
+    {
+        public int judge_condition_id;
+        public string judge_condition_key;
+        public int input_kind;
+        public int criteria_kind;
+        public int min_criteria;
+        public int max_criteria;
+        public int min_inputs;
+        public int max_inputs;
+        public int requires_options_flg;
+        public string description;
+    }
+
+    [Serializable]
+    public class MasterInspectionTargetRecord
+    {
+        public int inspection_target_id;
+        public int area_id;
+        public int detection_type_id;
+        public string inspection_target_name;
+        public int display_no;
+    }
+
+    [Serializable]
+    public class MasterInspectionItemRecord
+    {
+        public int inspection_item_id;
+        public int inspection_target_id;
+        public int judge_condition_id;
+        public int inspection_item_key;
+        public string valid_from;
+        public string valid_to;
+        public string item_name;
+        public string unit;
+        public string options_json;
+        public string criteria_json;
+        public int display_no;
+    }
+
+    [Serializable]
+    public class MasterInspectionTargetAttachmentRecord
+    {
+        public int target_attachment_id;
+        public int inspection_target_id;
+        public string file_name;
+        public string file_kind;
     }
 
     [Serializable]
     public class GetMasterDataRequestDto
     {
-        public int targets;
-        public int sosaKashoId;
+        public int areaId;
     }
 
     [Serializable]
     public class GetMasterDataResponseDto
     {
-        public int sosaKashoId;
-        public int targets;
-        public MasterDataItem[] sampleA;
-        public MasterDataItem[] sampleB;
-    }
-
-    public class UploadResult
-    {
-        private UploadResult(bool isSuccess, long statusCode, string uploadId, string message)
-        {
-            IsSuccess = isSuccess;
-            StatusCode = statusCode;
-            UploadId = uploadId ?? string.Empty;
-            Message = message ?? string.Empty;
-        }
-
-        public bool IsSuccess { get; }
-        public long StatusCode { get; }
-        public string UploadId { get; }
-        public string Message { get; }
-
-        public static UploadResult Success(long statusCode, string uploadId)
-        {
-            return new UploadResult(true, statusCode, uploadId, string.Empty);
-        }
-
-        public static UploadResult Failure(long statusCode, string message)
-        {
-            return new UploadResult(false, statusCode, string.Empty, message);
-        }
+        public int areaId;
+        public MasterCategoryRecord[] ms_categories;
+        public MasterAreaRecord[] ms_areas;
+        public MasterInspectorRecord[] ms_inspectors;
+        public MasterDetectionTypeRecord[] ms_detection_types;
+        public MasterJudgeConditionRecord[] ms_judge_conditions;
+        public MasterInspectionTargetRecord[] ms_inspection_targets;
+        public MasterInspectionItemRecord[] ms_inspection_items;
+        public MasterInspectionTargetAttachmentRecord[] ms_inspection_target_attachments;
     }
 
     [Serializable]
@@ -97,64 +155,8 @@ namespace Scripts.Common.Features.RestApi
     }
 
     [Serializable]
-    public class UploadResponseDto
-    {
-        public string status;
-        public string uploadId;
-        public string message;
-    }
-
-    [Serializable]
-    public class ApiErrorResponseDto
-    {
-        public string status;
-        public string message;
-    }
-
-    [Serializable]
     public class DownloadRequestDto
     {
         public string uploadId;
-    }
-
-    public class ApiHttpResponse
-    {
-        readonly ReadOnlyDictionary<string, string> _headers;
-
-        public ApiHttpResponse(
-            bool isTransportSuccess,
-            long statusCode,
-            string responseText,
-            string errorMessage,
-            byte[] responseBytes,
-            IDictionary<string, string> headers)
-        {
-            IsTransportSuccess = isTransportSuccess;
-            StatusCode = statusCode;
-            ResponseText = responseText ?? string.Empty;
-            ErrorMessage = errorMessage ?? string.Empty;
-            ResponseBytes = responseBytes ?? Array.Empty<byte>();
-            _headers = new ReadOnlyDictionary<string, string>(
-                new Dictionary<string, string>(headers ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase));
-        }
-
-        public bool IsTransportSuccess { get; }
-        public long StatusCode { get; }
-        public string ResponseText { get; }
-        public string ErrorMessage { get; }
-        public byte[] ResponseBytes { get; }
-        public IReadOnlyDictionary<string, string> Headers => _headers;
-
-        public bool IsSuccessStatusCode => StatusCode >= 200 && StatusCode < 300;
-
-        public string GetHeader(string headerName)
-        {
-            if (string.IsNullOrWhiteSpace(headerName))
-            {
-                return string.Empty;
-            }
-
-            return _headers.TryGetValue(headerName, out var value) ? value : string.Empty;
-        }
     }
 }

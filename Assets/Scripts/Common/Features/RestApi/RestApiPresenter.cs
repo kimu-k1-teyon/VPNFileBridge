@@ -33,26 +33,43 @@ namespace Scripts.Common.Features.RestApi
 
         async Task Post()
         {
-            var result = await _downloadService.DownloadAsync("abcd-unity");
-            if (result != null)
-            {
-                Debug.Log($"Length: {result.Length}");
-            }
-            // var result = await _masterService.GetMasterData(10, 1);
+            // var result = await _downloadService.DownloadAsync("260316T1753");
             // if (result != null)
             // {
-            //     Debug.Log($"isSuccess: {result.isSuccess}");
-            //     Debug.Log($"statusCode: {result.statusCode}");
-            //     Debug.Log($"targets: {result.targets}");
-            //     Debug.Log($"sosaKashoId: {result.sosaKashoId}");
-            //     Debug.Log($"message: {result.message}");
+            //     Debug.Log($"Length: {result.Length}");
+            // }
+            var result = await _masterService.GetMasterData(1);
+            if (result != null)
+            {
+                Debug.Log($"isSuccess: {result.isSuccess}");
+                Debug.Log($"statusCode: {result.statusCode}");
+                Debug.Log($"areaId: {result.areaId}");
+                Debug.Log($"message: {result.message}");
+                Debug.Log($"ms_areas: {result.ms_areas?.Length ?? 0}");
+                Debug.Log($"ms_inspectors: {result.ms_inspectors?.Length ?? 0}");
+                Debug.Log($"ms_inspection_targets: {result.ms_inspection_targets?.Length ?? 0}");
 
-            //     Debug.Log($"Success: {result.sampleB[0].id}");
-            // }
-            // else
+                if (result.ms_areas != null && result.ms_areas.Length > 0)
+                {
+                    Debug.Log($"Success: {result.ms_areas[0].area_name}");
+                }
+            }
+            else
+            {
+                Debug.Log("Failed");
+            }
+
+
+            // var ct = new CancellationToken();
+            // var filePath = Path.Combine(Application.streamingAssetsPath, "unity-sample-json.json");
+            // var result = await _uploadService.UploadAsync("260319T1057", filePath, ct);
+
+            // if (result != null)
             // {
-            //     Debug.Log("Failed");
+            //     Debug.Log("result.StatusCode: " + result.StatusCode);
             // }
+
+
         }
 
         void InstanceClient(APIConfig config)
@@ -72,8 +89,9 @@ namespace Scripts.Common.Features.RestApi
 
                 // HTTPCLIENTの作成
                 _log.Write("BaseAddress: " + config.BaseUrl);
+                _model.UploadTimeoutMS = Math.Max(config.TimeoutMS, _model.UploadTimeoutMS);
                 _model.Client = new HttpClient(handler);
-                _model.Client.Timeout = TimeSpan.FromMilliseconds(config.TimeoutMS);
+                _model.Client.Timeout = Timeout.InfiniteTimeSpan;
                 _model.Client.BaseAddress = new Uri(config.BaseUrl);
             }
         }
